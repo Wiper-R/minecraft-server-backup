@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-BACKUP_DIR="$HOME/mc-backup"
+BACKUP_DIR="$PWD"
 SERVER_DIR="$HOME/minecraft-server"
 TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
 
@@ -11,12 +11,32 @@ list_backups() {
     find "$BACKUP_DIR" -maxdepth 1 -type d -name "????-??-??_??-??-??" -printf "%f\n" 2>/dev/null | sort -r
 }
 
+create_backup() {
+    echo "Creating a backup of the current server state..."
+    LAST_BACKUP=$(find "$BACKUP_DIR" -maxdepth 1 -type d -name "????-??-??_??-??-??" -printf "%f\n" 2>/dev/null | sort -r | head -n 1)
+    LAST_BACKUP_PATH=""
+    if [ -n "$LAST_BACKUP" ]; then
+        LAST_BACKUP_PATH="$BACKUP_DIR/$LAST_BACKUP"
+    fi
+
+    BACKUP_COMMAND="rsync -av --delete $SERVER_DIR/ $BACKUP_DIR/$TIMESTAMP/"
+    if [ -n "$LAST_BACKUP_PATH" ]; then
+        BACKUP_COMMAND="$BACKUP_COMMAND --link-dest=$LAST_BACKUP_PATH/"
+    fi
+
+    echo "Executing command: $BACKUP_COMMAND"
+    eval "$BACKUP_COMMAND"
+    echo "Backup created."
+}
+
 restore_backup() {
     local backup_name="$1"
     local restore_path="$BACKUP_DIR/$backup_name"
 
     echo "$restore_path"
     if [ -d "$restore_path" ]; then
+        echo "Creating backup before restoring..."
+        create_backup
         echo "Restoring from backup: $restore_path"
         rsync -av "$restore_path/" "$SERVER_DIR/"
         echo "Restore Complete."
@@ -43,20 +63,4 @@ while getopts "lr:" opt; do
     esac
 done
 
-LAST_BACKUP=$(find "$BACKUP_DIR" -maxdepth 1 -type d -name "????-??-??_??-??-??" -printf "%f\n" 2>/dev/null | sort -r | head -n 1)
-
-if [ -n "$LAST_BACKUP" ]; then
-    LAST_BACKUP_PATH="$BACKUP_DIR/$LAST_BACKUP"
-else
-    LAST_BACKUP_PATH=""
-fi
-
-COMMAND="rsync -av --delete $SERVER_DIR/ $BACKUP_DIR/$TIMESTAMP/"
-
-if [ -n "$LAST_BACKUP_PATH" ]; then
-    COMMAND="$COMMAND --link-dest=$LAST_BACKUP_PATH/"
-fi
-
-echo "Executing command: $COMMAND"
-
-eval "$COMMAND"
+create_backup
